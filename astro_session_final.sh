@@ -1,5 +1,27 @@
 #!/bin/bash
 
+get_config_choices() {
+    local config_path="$1"
+    local fallback_choices="$2"
+    local choices
+
+    choices=$(gphoto2 --get-config "$config_path" 2>/dev/null | awk -F': ' '
+        /^Choice:/ {
+            if (choices != "") choices = choices ", "
+            choices = choices $2
+        }
+        END {
+            if (choices != "") print choices
+        }
+    ')
+
+    if [ -n "$choices" ]; then
+        echo "$choices"
+    else
+        echo "$fallback_choices"
+    fi
+}
+
 # Ask for capture settings
 read -p "Number of frames [1]: " TOTAL_FRAMES
 TOTAL_FRAMES=${TOTAL_FRAMES:-1}
@@ -10,28 +32,11 @@ INTERVAL=${INTERVAL:-2}
 read -p "ISO [100]: " ISO
 ISO=${ISO:-100}
 
-read -p "Shutter speed in seconds [1]: " SHUTTER_SPEED
-SHUTTER_SPEED=${SHUTTER_SPEED:-1}
-
-read -p "Aperture [11]: " APERTURE
-APERTURE=${APERTURE:-11}
-
 echo ""
 echo "Capture settings:"
 echo "  Frames:       $TOTAL_FRAMES"
 echo "  Interval:     ${INTERVAL}s"
 echo "  ISO:          $ISO"
-echo "  Shutter:      ${SHUTTER_SPEED}s"
-echo "  Aperture:     f/$APERTURE"
-echo ""
-
-read -p "Start capture? [Y/n]: " CONFIRM
-CONFIRM=${CONFIRM:-Y}
-
-if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
-    echo "Cancelled."
-    exit 0
-fi
 
 # 1. Kill background processes to free up the USB interface
 
@@ -67,6 +72,35 @@ else
         systemctl --user start gvfs-gphoto2-volume-monitor.service 2>/dev/null
         exit 1
     fi
+fi
+
+SHUTTER_OPTIONS=$(get_config_choices "/main/capturesettings/shutterspeed" "bulb, 1, 1/60, 1/125, 1/250")
+APERTURE_OPTIONS=$(get_config_choices "/main/capturesettings/aperture" "3.5, 5.6, 8, 11, 16")
+
+echo ""
+echo "Available shutter speed options: $SHUTTER_OPTIONS"
+read -p "Shutter speed [1] (enter one of the listed values): " SHUTTER_SPEED
+SHUTTER_SPEED=${SHUTTER_SPEED:-1}
+
+echo "Available aperture options: $APERTURE_OPTIONS"
+read -p "Aperture [11] (enter one of the listed values): " APERTURE
+APERTURE=${APERTURE:-11}
+
+echo ""
+echo "Capture settings:"
+echo "  Frames:       $TOTAL_FRAMES"
+echo "  Interval:     ${INTERVAL}s"
+echo "  ISO:          $ISO"
+echo "  Shutter:      $SHUTTER_SPEED"
+echo "  Aperture:     $APERTURE"
+echo ""
+
+read -p "Start capture? [Y/n]: " CONFIRM
+CONFIRM=${CONFIRM:-Y}
+
+if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
+    echo "Cancelled."
+    exit 0
 fi
 
 # 4. Create a uniquely named folder for tonight's session
