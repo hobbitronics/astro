@@ -9,8 +9,13 @@ The script creates a new session folder in your current working directory, so yo
 - Prompts for frame count and interval.
 - Connects to your camera through gphoto2.
 - Shows available camera values for ISO, shutter speed, and aperture.
+- Validates ISO, shutter speed, and aperture input against available camera options.
+- Detects a supported image-format config path and enforces RAW only.
+- Warns if the camera focus mode is not Manual.
 - Applies your selected settings.
+- Stops immediately with a clear error if any camera setting fails to apply.
 - Captures and downloads images into a timestamped folder.
+- Writes a session metadata file with selected settings and timestamps.
 
 ## Requirements
 
@@ -77,12 +82,21 @@ astro_shot_002.<ext>
 ...
 ```
 
+The folder also includes:
+
+```text
+session_metadata.txt
+```
+
+This metadata file records selected settings, camera detect info, battery level (if available), and start/finish timestamps.
+
 ## Input Notes
 
 - Enter the exact value labels shown in the options list.
   - ISO examples: `Auto`, `800`, `1600`
   - Shutter examples: `1`, `0.5`, `1/30`, `bulb`
   - Aperture examples: `3.5`, `5.6`, `11`
+- If you type a value that is not in the displayed options, the script rejects it and asks again.
 - Press Enter with no value to use the default shown in brackets.
 
 ## Troubleshooting
