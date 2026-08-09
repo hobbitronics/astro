@@ -29,14 +29,10 @@ TOTAL_FRAMES=${TOTAL_FRAMES:-1}
 read -p "Interval between shots in seconds [2]: " INTERVAL
 INTERVAL=${INTERVAL:-2}
 
-read -p "ISO [100]: " ISO
-ISO=${ISO:-100}
-
 echo ""
 echo "Capture settings:"
 echo "  Frames:       $TOTAL_FRAMES"
 echo "  Interval:     ${INTERVAL}s"
-echo "  ISO:          $ISO"
 
 # 1. Kill background processes to free up the USB interface
 
@@ -76,6 +72,12 @@ fi
 
 SHUTTER_OPTIONS=$(get_config_choices "/main/capturesettings/shutterspeed" "bulb, 1, 1/60, 1/125, 1/250")
 APERTURE_OPTIONS=$(get_config_choices "/main/capturesettings/aperture" "3.5, 5.6, 8, 11, 16")
+ISO_OPTIONS=$(get_config_choices "/main/imgsettings/iso" "100, 200, 400, 800, 1600")
+
+echo ""
+echo "Available ISO options: $ISO_OPTIONS"
+read -p "ISO [100] (enter one of the listed values): " ISO
+ISO=${ISO:-100}
 
 echo ""
 echo "Available shutter speed options: $SHUTTER_OPTIONS"
