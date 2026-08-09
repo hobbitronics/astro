@@ -26,8 +26,8 @@ get_config_choices() {
 read -p "Number of frames [1]: " TOTAL_FRAMES
 TOTAL_FRAMES=${TOTAL_FRAMES:-1}
 
-read -p "Interval between shots in seconds [2]: " INTERVAL
-INTERVAL=${INTERVAL:-2}
+read -p "Interval between shots in seconds [12]: " INTERVAL
+INTERVAL=${INTERVAL:-12}
 
 echo ""
 echo "Capture settings:"
