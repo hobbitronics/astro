@@ -1,14 +1,26 @@
 #!/bin/bash
 
+MONITOR_STOPPED=0
+
+restore_volume_monitor() {
+    if [ "$MONITOR_STOPPED" -eq 1 ]; then
+        systemctl --user start gvfs-gphoto2-volume-monitor.service 2>/dev/null
+        MONITOR_STOPPED=0
+    fi
+}
+
+trap restore_volume_monitor EXIT
+
 get_config_choices() {
     local config_path="$1"
     local fallback_choices="$2"
     local choices
 
-    choices=$(gphoto2 --get-config "$config_path" 2>/dev/null | awk -F': ' '
+    choices=$(gphoto2 --get-config "$config_path" 2>/dev/null | awk '
         /^Choice:/ {
+            sub(/^Choice:[[:space:]]+[0-9]+[[:space:]]+/, "")
             if (choices != "") choices = choices ", "
-            choices = choices $2
+            choices = choices $0
         }
         END {
             if (choices != "") print choices
@@ -40,13 +52,13 @@ echo ""
 echo "Releasing USB lock from system volume monitors..."
 systemctl --user stop gvfs-gphoto2-volume-monitor.service 2>/dev/null
 killall gvfs-gphoto2-volume-monitor gvfsd-gphoto2 2>/dev/null
+MONITOR_STOPPED=1
 
 # 2. Check if the camera is physically connected and detected
 
 echo "Checking camera connection..."
 if ! gphoto2 --auto-detect | grep -q "usb"; then
     echo "❌ ERROR: Camera not detected! Check your USB cable and power switch."
-    systemctl --user start gvfs-gphoto2-volume-monitor.service 2>/dev/null
     exit 1
 fi
 
@@ -65,7 +77,6 @@ else
 
     if [[ "$BATTERY_VAL" =~ ^[0-9]+$ ]] && [ "$BATTERY_VAL" -lt 20 ]; then
         echo "❌ ERROR: Battery is too low ($BATTERY_VAL%). Recharge before starting."
-        systemctl --user start gvfs-gphoto2-volume-monitor.service 2>/dev/null
         exit 1
     fi
 fi
@@ -161,4 +172,5 @@ echo "Images saved in: $(pwd)"
 # 7. Restore system services
 
 echo "Restoring system volume monitor..."
-systemctl --user start gvfs-gphoto2-volume-monitor.service 2>/dev/null
+restore_volume_monitor
+trap - EXIT
