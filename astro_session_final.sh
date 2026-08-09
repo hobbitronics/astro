@@ -76,17 +76,17 @@ ISO_OPTIONS=$(get_config_choices "/main/imgsettings/iso" "100, 200, 400, 800, 16
 
 echo ""
 echo "Available ISO options: $ISO_OPTIONS"
-read -p "ISO [100] (enter one of the listed values): " ISO
-ISO=${ISO:-100}
+read -p "ISO [1600] (enter one of the listed values): " ISO
+ISO=${ISO:-1600}
 
 echo ""
 echo "Available shutter speed options: $SHUTTER_OPTIONS"
-read -p "Shutter speed [1] (enter one of the listed values): " SHUTTER_SPEED
-SHUTTER_SPEED=${SHUTTER_SPEED:-1}
+read -p "Shutter speed [10] (enter one of the listed values): " SHUTTER_SPEED
+SHUTTER_SPEED=${SHUTTER_SPEED:-10}
 
 echo "Available aperture options: $APERTURE_OPTIONS"
-read -p "Aperture [11] (enter one of the listed values): " APERTURE
-APERTURE=${APERTURE:-11}
+read -p "Aperture [3.5] (enter one of the listed values): " APERTURE
+APERTURE=${APERTURE:-3.5}
 
 echo ""
 echo "Capture settings:"
