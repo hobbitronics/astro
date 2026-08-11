@@ -184,7 +184,7 @@ check_battery_level() {
 
 load_camera_options() {
     SHUTTER_OPTIONS=$(get_config_choices "/main/capturesettings/shutterspeed" "bulb, 1, 1/60, 1/125, 1/250")
-    APERTURE_OPTIONS=$(get_config_choices "/main/capturesettings/aperture" "3.5, 5.6, 8, 11, 16")
+    APERTURE_OPTIONS=$(get_config_choices "/main/capturesettings/aperture" "4, 5.6, 8, 11, 16")
     ISO_OPTIONS=$(get_config_choices "/main/imgsettings/iso" "100, 200, 400, 800, 1600")
     IMAGE_FORMAT_PATH=$(find_first_config_path "/main/imgsettings/imageformat" "/main/imgsettings/imageformatsd" "/main/imgsettings/imgformat")
 
@@ -262,7 +262,7 @@ echo "Available shutter speed options: $SHUTTER_OPTIONS"
 prompt_for_valid_choice "Shutter speed" "10" "$SHUTTER_OPTIONS" SHUTTER_SPEED
 
 echo "Available aperture options: $APERTURE_OPTIONS"
-prompt_for_valid_choice "Aperture" "3.5" "$APERTURE_OPTIONS" APERTURE
+prompt_for_valid_choice "Aperture" "4" "$APERTURE_OPTIONS" APERTURE
 
 print_capture_settings
 
