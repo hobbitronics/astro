@@ -9,6 +9,7 @@ The script creates a new session folder in your current working directory, so yo
 - Prompts for frame count and interval.
 - Connects to your camera through gphoto2.
 - Shows available camera values for ISO, shutter speed, and aperture.
+- Offers optional Live View for manual focusing before capture starts.
 - Validates ISO, shutter speed, and aperture input against available camera options.
 - Detects a supported image-format config path and enforces RAW only.
 - Warns if the camera focus mode is not Manual.
@@ -21,6 +22,7 @@ The script creates a new session folder in your current working directory, so yo
 
 - Linux system
 - `gphoto2` installed
+- `ffplay` installed (optional, for Live View)
 - Camera connected by USB and recognized by gphoto2
 
 Install gphoto2 on Debian/Ubuntu:
@@ -42,6 +44,12 @@ Optional camera check:
 
 ```bash
 gphoto2 --auto-detect
+```
+
+Optional Live View dependency install on Debian/Ubuntu:
+
+```bash
+sudo apt install ffmpeg
 ```
 
 ## Recommended Usage (Run From Pictures)
@@ -89,6 +97,7 @@ session_metadata.txt
 ```
 
 This metadata file records selected settings, camera detect info, battery level (if available), and start/finish timestamps.
+It also records whether Live View was used.
 
 ## Input Notes
 

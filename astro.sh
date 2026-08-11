@@ -12,6 +12,7 @@ restore_volume_monitor() {
 trap restore_volume_monitor EXIT
 
 RUN_STARTED_AT=$(date -Iseconds)
+LIVE_VIEW_USED="no"
 
 trim_whitespace() {
     echo "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
@@ -164,6 +165,31 @@ check_focus_mode() {
     fi
 }
 
+run_live_view_if_requested() {
+    local answer
+
+    read -p "Open Live View for manual focusing now? [y/N]: " answer
+    answer=${answer:-N}
+
+    if [[ ! "$answer" =~ ^[Yy]$ ]]; then
+        return 0
+    fi
+
+    if ! command -v ffplay > /dev/null 2>&1; then
+        echo "⚠️ WARNING: ffplay is not installed. Skipping Live View."
+        return 0
+    fi
+
+    echo ""
+    echo "Starting Live View..."
+    echo "Tip: press q in the ffplay window when you are done focusing."
+
+    gphoto2 --stdout --capture-movie | ffplay -f mjpeg -
+
+    LIVE_VIEW_USED="yes"
+    echo "Live View closed."
+}
+
 check_battery_level() {
     echo "Checking battery level..."
     BATTERY_INFO=$(gphoto2 --get-config /main/status/batterylevel 2>/dev/null)
@@ -210,6 +236,7 @@ write_session_metadata() {
         echo "run_started_at: $RUN_STARTED_AT"
         echo "camera_detect_line: ${CAMERA_MODEL_LINE:-unknown}"
         echo "focus_mode: ${FOCUS_MODE:-unknown}"
+        echo "live_view_used: $LIVE_VIEW_USED"
         echo "battery_level: ${BATTERY_VAL:-unknown}"
         echo "frames: $TOTAL_FRAMES"
         echo "interval_seconds: $INTERVAL"
@@ -247,6 +274,7 @@ MONITOR_STOPPED=1
 
 check_camera_connection
 check_focus_mode
+run_live_view_if_requested
 
 # 3. Check battery status
 
