@@ -13,6 +13,8 @@ trap restore_volume_monitor EXIT
 
 RUN_STARTED_AT=$(date -Iseconds)
 LIVE_VIEW_USED="no"
+LIVE_VIEW_SIZE_PATH="not-supported"
+LIVE_VIEW_SIZE_SELECTED="unchanged"
 
 trim_whitespace() {
     echo "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
@@ -127,6 +129,94 @@ choose_image_format() {
     return 1
 }
 
+choose_largest_live_view_size() {
+    local options_csv="$1"
+    local option
+    local best_option=""
+    local best_score=-1
+    local score
+    local trimmed
+    local lower
+    local width
+    local height
+
+    IFS=',' read -r -a options <<< "$options_csv"
+
+    for option in "${options[@]}"; do
+        trimmed=$(trim_whitespace "$option")
+        lower=$(echo "$trimmed" | tr '[:upper:]' '[:lower:]')
+        score=0
+
+        if [[ "$trimmed" =~ ^([0-9]{3,4})x([0-9]{3,4})$ ]]; then
+            width=${BASH_REMATCH[1]}
+            height=${BASH_REMATCH[2]}
+            score=$(( width * height ))
+        elif [[ "$lower" == *"1920"* ]]; then
+            score=2073600
+        elif [[ "$lower" == *"1280"* ]]; then
+            score=921600
+        elif [[ "$lower" == *"1024"* ]]; then
+            score=786432
+        elif [[ "$lower" == *"960"* ]]; then
+            score=614400
+        elif [[ "$lower" == *"800"* ]]; then
+            score=480000
+        elif [[ "$lower" == *"640"* ]]; then
+            score=307200
+        elif [[ "$lower" == *"full hd"* ]] || [[ "$lower" == *"fhd"* ]]; then
+            score=2073600
+        elif [[ "$lower" == *"large"* ]] || [[ "$lower" == *"high"* ]]; then
+            score=900000
+        elif [[ "$lower" == *"medium"* ]]; then
+            score=500000
+        elif [[ "$lower" == *"small"* ]] || [[ "$lower" == *"low"* ]]; then
+            score=250000
+        fi
+
+        if [ "$score" -gt "$best_score" ]; then
+            best_score=$score
+            best_option="$trimmed"
+        fi
+    done
+
+    if [ -n "$best_option" ]; then
+        echo "$best_option"
+        return 0
+    fi
+
+    return 1
+}
+
+configure_live_view_size() {
+    local live_view_size_options
+    local selected_live_view_size
+
+    LIVE_VIEW_SIZE_PATH=$(find_first_config_path "/main/capturesettings/liveviewsize")
+
+    if [ -z "$LIVE_VIEW_SIZE_PATH" ]; then
+        LIVE_VIEW_SIZE_PATH="not-supported"
+        echo "⚠️ WARNING: Camera does not expose /main/capturesettings/liveviewsize. Continuing with current camera value."
+        return 0
+    fi
+
+    live_view_size_options=$(get_config_choices "$LIVE_VIEW_SIZE_PATH" "")
+    selected_live_view_size=$(choose_largest_live_view_size "$live_view_size_options")
+
+    if [ -z "$selected_live_view_size" ]; then
+        echo "⚠️ WARNING: No Live View size choices found. Continuing with current camera value."
+        return 0
+    fi
+
+    if set_camera_config_or_fail "$LIVE_VIEW_SIZE_PATH" "$selected_live_view_size" "live view size"; then
+        LIVE_VIEW_SIZE_SELECTED="$selected_live_view_size"
+        echo "✓ Live View size set to: $LIVE_VIEW_SIZE_SELECTED"
+        return 0
+    fi
+
+    echo "⚠️ WARNING: Could not set Live View size. Continuing with current camera value."
+    return 0
+}
+
 print_capture_settings() {
     echo ""
     echo "Capture settings:"
@@ -180,11 +270,14 @@ run_live_view_if_requested() {
         return 0
     fi
 
+    configure_live_view_size
+
     echo ""
     echo "Starting Live View..."
+    echo "Live View window: 1920x1080"
     echo "Tip: press q in the ffplay window when you are done focusing."
 
-    gphoto2 --stdout --capture-movie | ffplay -f mjpeg -
+    gphoto2 --stdout --capture-movie | ffplay -f mjpeg -x 1920 -y 1080 -
 
     LIVE_VIEW_USED="yes"
     echo "Live View closed."
@@ -209,7 +302,7 @@ check_battery_level() {
 }
 
 load_camera_options() {
-    SHUTTER_OPTIONS=$(get_config_choices "/main/capturesettings/shutterspeed" "bulb, 1, 1/60, 1/125, 1/250")
+    SHUTTER_OPTIONS=$(get_config_choices "/main/capturesettings/shutterspeed" "bulb, 30, 25, 20, 15, 13, 10.3, 8, 6.3, 5, 4, 3.2, 2.5, 2, 1.6, 1.3, 1, 0.8, 0.6, 0.5")
     APERTURE_OPTIONS=$(get_config_choices "/main/capturesettings/aperture" "4, 5.6, 8, 11, 16")
     ISO_OPTIONS=$(get_config_choices "/main/imgsettings/iso" "100, 200, 400, 800, 1600")
     IMAGE_FORMAT_PATH=$(find_first_config_path "/main/imgsettings/imageformat" "/main/imgsettings/imageformatsd" "/main/imgsettings/imgformat")
@@ -237,6 +330,8 @@ write_session_metadata() {
         echo "camera_detect_line: ${CAMERA_MODEL_LINE:-unknown}"
         echo "focus_mode: ${FOCUS_MODE:-unknown}"
         echo "live_view_used: $LIVE_VIEW_USED"
+        echo "live_view_size_path: ${LIVE_VIEW_SIZE_PATH:-unknown}"
+        echo "live_view_size_selected: ${LIVE_VIEW_SIZE_SELECTED:-unknown}"
         echo "battery_level: ${BATTERY_VAL:-unknown}"
         echo "frames: $TOTAL_FRAMES"
         echo "interval_seconds: $INTERVAL"
@@ -287,7 +382,7 @@ prompt_for_valid_choice "ISO" "1600" "$ISO_OPTIONS" ISO
 
 echo ""
 echo "Available shutter speed options: $SHUTTER_OPTIONS"
-prompt_for_valid_choice "Shutter speed" "10" "$SHUTTER_OPTIONS" SHUTTER_SPEED
+prompt_for_valid_choice "Shutter speed" "5" "$SHUTTER_OPTIONS" SHUTTER_SPEED
 
 echo "Available aperture options: $APERTURE_OPTIONS"
 prompt_for_valid_choice "Aperture" "4" "$APERTURE_OPTIONS" APERTURE
