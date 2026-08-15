@@ -112,16 +112,29 @@ find_first_config_path() {
     return 1
 }
 
+require_camera_config_path() {
+    local label="$1"
+    shift
+
+    if ! find_first_config_path "$@"; then
+        echo "❌ ERROR: Could not find a supported $label config path on this camera." >&2
+        return 1
+    fi
+}
+
 choose_image_format() {
     local options_csv="$1"
     local option
+    local trimmed
+    local upper
 
     IFS=',' read -r -a options <<< "$options_csv"
 
     for option in "${options[@]}"; do
-        option=$(trim_whitespace "$option")
-        if [ "$option" = "RAW" ]; then
-            echo "$option"
+        trimmed=$(trim_whitespace "$option")
+        upper=$(echo "$trimmed" | tr '[:lower:]' '[:upper:]')
+        if [[ "$upper" == *"RAW"* ]]; then
+            echo "$trimmed"
             return 0
         fi
     done
@@ -217,6 +230,14 @@ configure_live_view_size() {
     return 0
 }
 
+camera_supports_live_view() {
+    find_first_config_path \
+        "/main/actions/eosviewfinder" \
+        "/main/actions/viewfinder" \
+        "/main/capturesettings/liveviewsize" \
+        > /dev/null
+}
+
 print_capture_settings() {
     echo ""
     echo "Capture settings:"
@@ -245,9 +266,14 @@ check_camera_connection() {
 }
 
 check_focus_mode() {
-    FOCUS_MODE=$(get_config_current_value "/main/capturesettings/focusmode")
+    FOCUS_MODE_PATH=$(find_first_config_path "/main/capturesettings/focusmode" "/main/settings/focusmode")
+    if [ -z "$FOCUS_MODE_PATH" ]; then
+        return 0
+    fi
+
+    FOCUS_MODE=$(get_config_current_value "$FOCUS_MODE_PATH")
     if [ -n "$FOCUS_MODE" ]; then
-        if [ "$FOCUS_MODE" = "Manual" ]; then
+        if [[ "$FOCUS_MODE" == Manual* ]]; then
             echo "✓ Focus mode is Manual."
         else
             echo "⚠️ WARNING: Focus mode is '$FOCUS_MODE'. Switch the lens/camera to Manual focus for astrophotography."
@@ -257,6 +283,11 @@ check_focus_mode() {
 
 run_live_view_if_requested() {
     local answer
+
+    if ! camera_supports_live_view; then
+        echo "⚠️ WARNING: Camera does not expose Live View over USB. Skipping Live View prompt."
+        return 0
+    fi
 
     read -p "Open Live View for manual focusing now? [y/N]: " answer
     answer=${answer:-N}
@@ -302,14 +333,21 @@ check_battery_level() {
 }
 
 load_camera_options() {
-    SHUTTER_OPTIONS=$(get_config_choices "/main/capturesettings/shutterspeed" "bulb, 30, 25, 20, 15, 13, 10.3, 8, 6.3, 5, 4, 3.2, 2.5, 2, 1.6, 1.3, 1, 0.8, 0.6, 0.5")
-    APERTURE_OPTIONS=$(get_config_choices "/main/capturesettings/aperture" "4, 5.6, 8, 11, 16")
-    ISO_OPTIONS=$(get_config_choices "/main/imgsettings/iso" "100, 200, 400, 800, 1600")
-    IMAGE_FORMAT_PATH=$(find_first_config_path "/main/imgsettings/imageformat" "/main/imgsettings/imageformatsd" "/main/imgsettings/imgformat")
+    ISO_PATH=$(require_camera_config_path "ISO" "/main/imgsettings/iso" "/main/settings/iso") || exit 1
+    SHUTTER_PATH=$(require_camera_config_path "shutter speed" "/main/capturesettings/shutterspeed" "/main/settings/shutterspeed") || exit 1
+    APERTURE_PATH=$(require_camera_config_path "aperture" "/main/capturesettings/aperture" "/main/settings/aperture") || exit 1
+
+    SHUTTER_OPTIONS=$(get_config_choices "$SHUTTER_PATH" "bulb, 30, 25, 20, 15, 13, 10.3, 8, 6.3, 5, 4, 3.2, 2.5, 2, 1.6, 1.3, 1, 0.8, 0.6, 0.5")
+    APERTURE_OPTIONS=$(get_config_choices "$APERTURE_PATH" "4, 5.6, 8, 11, 16")
+    ISO_OPTIONS=$(get_config_choices "$ISO_PATH" "100, 200, 400, 800, 1600")
+    IMAGE_FORMAT_PATH=$(find_first_config_path "/main/imgsettings/imageformat" "/main/imgsettings/imageformatsd" "/main/imgsettings/imgformat" "/main/imgsettings/imagequality" "/main/imgsettings/quality" "/main/settings/imageformat")
 
     if [ -z "$IMAGE_FORMAT_PATH" ]; then
-        echo "❌ ERROR: Could not find a supported image format config path on this camera."
-        exit 1
+        IMAGE_FORMAT_PATH="not-supported"
+        IMAGE_FORMAT_OPTIONS="not-supported"
+        IMAGE_FORMAT="unchanged"
+        echo "⚠️ WARNING: Camera does not expose an image format config path. Set RAW manually on the camera; continuing with current camera value."
+        return 0
     fi
 
     IMAGE_FORMAT_OPTIONS=$(get_config_choices "$IMAGE_FORMAT_PATH" "RAW, RAW + L, L")
@@ -338,6 +376,9 @@ write_session_metadata() {
         echo "iso: $ISO"
         echo "shutter_speed: $SHUTTER_SPEED"
         echo "aperture: $APERTURE"
+        echo "iso_path: $ISO_PATH"
+        echo "shutter_path: $SHUTTER_PATH"
+        echo "aperture_path: $APERTURE_PATH"
         echo "image_format_path: $IMAGE_FORMAT_PATH"
         echo "image_format: $IMAGE_FORMAT"
         echo "iso_options: $ISO_OPTIONS"
@@ -376,6 +417,11 @@ run_live_view_if_requested
 check_battery_level
 load_camera_options
 
+APERTURE_DEFAULT="4"
+if ! is_valid_choice "$APERTURE_DEFAULT" "$APERTURE_OPTIONS" && is_valid_choice "4.0" "$APERTURE_OPTIONS"; then
+    APERTURE_DEFAULT="4.0"
+fi
+
 echo ""
 echo "Available ISO options: $ISO_OPTIONS"
 prompt_for_valid_choice "ISO" "1600" "$ISO_OPTIONS" ISO
@@ -385,7 +431,7 @@ echo "Available shutter speed options: $SHUTTER_OPTIONS"
 prompt_for_valid_choice "Shutter speed" "5" "$SHUTTER_OPTIONS" SHUTTER_SPEED
 
 echo "Available aperture options: $APERTURE_OPTIONS"
-prompt_for_valid_choice "Aperture" "4" "$APERTURE_OPTIONS" APERTURE
+prompt_for_valid_choice "Aperture" "$APERTURE_DEFAULT" "$APERTURE_OPTIONS" APERTURE
 
 print_capture_settings
 
@@ -409,10 +455,14 @@ write_session_metadata
 # 5. Set camera configurations
 
 echo "Configuring camera settings..."
-set_camera_config_or_fail "$IMAGE_FORMAT_PATH" "$IMAGE_FORMAT" "image format" || exit 1
-set_camera_config_or_fail "/main/imgsettings/iso" "$ISO" "ISO" || exit 1
-set_camera_config_or_fail "/main/capturesettings/shutterspeed" "$SHUTTER_SPEED" "shutter speed" || exit 1
-set_camera_config_or_fail "/main/capturesettings/aperture" "$APERTURE" "aperture" || exit 1
+if [ "$IMAGE_FORMAT_PATH" != "not-supported" ]; then
+    set_camera_config_or_fail "$IMAGE_FORMAT_PATH" "$IMAGE_FORMAT" "image format" || exit 1
+else
+    echo "Skipping image format configuration; camera does not expose it over USB."
+fi
+set_camera_config_or_fail "$ISO_PATH" "$ISO" "ISO" || exit 1
+set_camera_config_or_fail "$SHUTTER_PATH" "$SHUTTER_SPEED" "shutter speed" || exit 1
+set_camera_config_or_fail "$APERTURE_PATH" "$APERTURE" "aperture" || exit 1
 
 # 6. Capture loop with progress bar
 

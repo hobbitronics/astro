@@ -9,9 +9,9 @@ The script creates a new session folder in your current working directory, so yo
 - Prompts for frame count and interval.
 - Connects to your camera through gphoto2.
 - Shows available camera values for ISO, shutter speed, and aperture.
-- Offers optional Live View for manual focusing before capture starts.
+- Offers optional Live View for manual focusing when the camera exposes it over USB.
 - Validates ISO, shutter speed, and aperture input against available camera options.
-- Detects a supported image-format config path and enforces RAW only.
+- Detects a supported image-format config path and selects RAW when the camera exposes that setting.
 - Warns if the camera focus mode is not Manual.
 - Applies your selected settings.
 - Stops immediately with a clear error if any camera setting fails to apply.
@@ -24,6 +24,7 @@ The script creates a new session folder in your current working directory, so yo
 - `gphoto2` installed
 - `ffplay` installed (optional, for Live View)
 - Camera connected by USB and recognized by gphoto2
+- A memory card for cameras/workflows where downloaded files are required
 
 Install gphoto2 on Debian/Ubuntu:
 
@@ -51,6 +52,23 @@ Optional Live View dependency install on Debian/Ubuntu:
 ```bash
 sudo apt install ffmpeg
 ```
+
+## Supported Models
+
+This script targets gphoto2-compatible cameras and discovers the setting paths exposed by each body.
+
+| Camera                         | Status   | Notes                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Canon EOS 300D / Digital Rebel | Tested   | Uses `/main/settings/...` paths for ISO, shutter speed, aperture, focus mode, and image format. USB Live View, battery level, and capture-target selection are not exposed. The camera may briefly display an exposure without a CF card; downloaded files still depend on what the camera makes available to gphoto2. |
+| Newer Canon EOS bodies         | Expected | Uses common `/main/imgsettings/...` and `/main/capturesettings/...` paths when exposed by gphoto2. Live View is offered only when the camera exposes Live View controls.                                                                                                                                               |
+
+If your camera is detected but settings are missing, run:
+
+```bash
+gphoto2 --list-config
+```
+
+Then compare the exposed paths with the script's supported path list.
 
 ## Recommended Usage (Run From Pictures)
 
@@ -116,6 +134,10 @@ It also records whether Live View was used.
   - Retry `gphoto2 --auto-detect`.
 - "Could not read battery level"
   - Script continues, but monitor battery manually.
+- Shutter fires but no image downloads
+  - Confirm a memory card is installed and has free space.
+  - Some older cameras, including the Canon EOS 300D, may show a brief post-shot review image without producing a downloadable file.
+  - The EOS 300D does not expose a gphoto2 capture-target setting, so this script cannot redirect capture storage directly to the computer before download.
 - Permission/USB busy issues
   - Close camera apps and file managers that may access the camera.
 
