@@ -176,6 +176,28 @@ choose_image_format() {
     return 1
 }
 
+choose_non_card_capture_target() {
+    local options_csv="$1"
+    local option
+    local normalized
+
+    IFS=',' read -r -a options <<< "$options_csv"
+
+    for option in "${options[@]}"; do
+        option=$(trim_whitespace "$option")
+        normalized=$(echo "$option" | tr '[:upper:]' '[:lower:]')
+
+        case "$normalized" in
+            *internal*|*ram*|*computer*|*host*|*sdram*)
+                echo "$option"
+                return 0
+                ;;
+        esac
+    done
+
+    return 1
+}
+
 print_capture_settings() {
     echo ""
     echo "Capture settings:"
@@ -251,6 +273,22 @@ load_camera_options() {
         echo "Available image format options: $IMAGE_FORMAT_OPTIONS"
         exit 1
     fi
+
+    CAPTURE_TARGET_PATH=$(find_first_config_path "/main/settings/capturetarget" "/main/capturesettings/capturetarget")
+
+    if [ -n "$CAPTURE_TARGET_PATH" ]; then
+        CAPTURE_TARGET_OPTIONS=$(get_config_choices "$CAPTURE_TARGET_PATH" "")
+        CAPTURE_TARGET=$(choose_non_card_capture_target "$CAPTURE_TARGET_OPTIONS")
+
+        if [ -n "$CAPTURE_TARGET" ]; then
+            echo "✓ Capture target '$CAPTURE_TARGET' selected to avoid keeping files on the card when possible."
+        else
+            echo "⚠️ WARNING: No non-card capture target found on this camera."
+            echo "Available capture target options: ${CAPTURE_TARGET_OPTIONS:-unknown}"
+        fi
+    else
+        echo "⚠️ WARNING: This camera does not expose a capture target setting via gphoto2."
+    fi
 }
 
 write_session_metadata() {
@@ -268,10 +306,13 @@ write_session_metadata() {
         echo "aperture: $APERTURE"
         echo "image_format_path: $IMAGE_FORMAT_PATH"
         echo "image_format: $IMAGE_FORMAT"
+        echo "capture_target_path: ${CAPTURE_TARGET_PATH:-unsupported}"
+        echo "capture_target: ${CAPTURE_TARGET:-card_or_camera_default}"
         echo "iso_options: $ISO_OPTIONS"
         echo "shutter_options: $SHUTTER_OPTIONS"
         echo "aperture_options: $APERTURE_OPTIONS"
         echo "image_format_options: $IMAGE_FORMAT_OPTIONS"
+        echo "capture_target_options: ${CAPTURE_TARGET_OPTIONS:-unknown}"
         echo "capture_started_at: $(date -Iseconds)"
     } > "$METADATA_FILE"
 }
@@ -335,6 +376,11 @@ write_session_metadata
 
 echo "Configuring camera settings..."
 set_camera_config_or_fail "$IMAGE_FORMAT_PATH" "$IMAGE_FORMAT" "image format" || exit 1
+
+if [ -n "$CAPTURE_TARGET_PATH" ] && [ -n "$CAPTURE_TARGET" ]; then
+    set_camera_config_or_fail "$CAPTURE_TARGET_PATH" "$CAPTURE_TARGET" "capture target" || exit 1
+fi
+
 set_camera_config_or_fail "/main/imgsettings/iso" "$ISO" "ISO" || exit 1
 set_camera_config_or_fail "/main/capturesettings/shutterspeed" "$SHUTTER_SPEED" "shutter speed" || exit 1
 set_camera_config_or_fail "/main/capturesettings/aperture" "$APERTURE" "aperture" || exit 1
