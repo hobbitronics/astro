@@ -1,11 +1,61 @@
 #!/bin/bash
 
 MONITOR_STOPPED=0
+MONITOR_STOP_METHOD=""
+
+release_volume_monitor() {
+    local os_name
+
+    os_name=$(uname -s)
+
+    if [ "$os_name" = "Linux" ]; then
+        systemctl --user stop gvfs-gphoto2-volume-monitor.service 2>/dev/null || true
+        killall gvfs-gphoto2-volume-monitor gvfsd-gphoto2 2>/dev/null || true
+        MONITOR_STOPPED=1
+        MONITOR_STOP_METHOD="linux_gvfs"
+        return 0
+    fi
+
+    if [ "$os_name" = "Darwin" ]; then
+        # macOS auto-launches PTPCamera, which can grab the USB/PTP interface.
+        killall PTPCamera 2>/dev/null || true
+
+        if launchctl bootout "gui/$UID/com.apple.PTPCamera" > /dev/null 2>&1; then
+            MONITOR_STOPPED=1
+            MONITOR_STOP_METHOD="macos_bootout"
+            return 0
+        fi
+
+        if launchctl unload -w /System/Library/LaunchAgents/com.apple.PTPCamera.plist > /dev/null 2>&1; then
+            MONITOR_STOPPED=1
+            MONITOR_STOP_METHOD="macos_unload"
+            return 0
+        fi
+
+        MONITOR_STOPPED=1
+        MONITOR_STOP_METHOD="macos_killall"
+        return 0
+    fi
+
+    return 0
+}
 
 restore_volume_monitor() {
     if [ "$MONITOR_STOPPED" -eq 1 ]; then
-        systemctl --user start gvfs-gphoto2-volume-monitor.service 2>/dev/null
+        case "$MONITOR_STOP_METHOD" in
+            linux_gvfs)
+                systemctl --user start gvfs-gphoto2-volume-monitor.service 2>/dev/null || true
+                ;;
+            macos_bootout)
+                launchctl bootstrap "gui/$UID" /System/Library/LaunchAgents/com.apple.PTPCamera.plist > /dev/null 2>&1 || true
+                ;;
+            macos_unload)
+                launchctl load -w /System/Library/LaunchAgents/com.apple.PTPCamera.plist > /dev/null 2>&1 || true
+                ;;
+        esac
+
         MONITOR_STOPPED=0
+        MONITOR_STOP_METHOD=""
     fi
 }
 
@@ -239,9 +289,7 @@ print_capture_settings
 
 echo ""
 echo "Releasing USB lock from system volume monitors..."
-systemctl --user stop gvfs-gphoto2-volume-monitor.service 2>/dev/null
-killall gvfs-gphoto2-volume-monitor gvfsd-gphoto2 2>/dev/null
-MONITOR_STOPPED=1
+release_volume_monitor
 
 # 2. Check if the camera is physically connected and detected
 
